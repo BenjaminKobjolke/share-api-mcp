@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "share-api": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["--directory", "${CLAUDE_PLUGIN_ROOT}", "run", "python", "-m", "share_api_mcp.mcp_server"]
+    }
+  }
+}
