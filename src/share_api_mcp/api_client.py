@@ -132,6 +132,7 @@ class ShareApiClient:
         """Fetch an entry and download all file attachments."""
         if download_dir is None:
             download_dir = self._settings.download_dir
+        download_dir = os.path.abspath(download_dir)
 
         entry_dir = os.path.join(download_dir, str(entry_id))
 
