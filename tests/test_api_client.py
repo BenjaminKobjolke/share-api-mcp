@@ -363,3 +363,261 @@ def test_mix_of_successful_and_failed_downloads(tmp_path: Path) -> None:
     assert len(result.failed_downloads) == 1
     assert result.failed_downloads[0].attachment_id == 11
     assert result.failed_downloads[0].filename == "bad.png"
+
+
+def test_parse_entry_with_file_url() -> None:
+    data = {
+        "id": 21,
+        "type": "file",
+        "subject": "Uploaded Doc",
+        "body": {},
+        "filename": "doc.pdf",
+        "file_size": 9000,
+        "file_url": "http://example.com/api.php/entries/21/file",
+        "attachments": [],
+    }
+    entry = _parse_entry(data)
+    assert entry.file_url == "http://example.com/api.php/entries/21/file"
+
+
+def test_entry_file_url_downloaded(tmp_path: Path) -> None:
+    """Entry with file_url triggers download of entry-level file."""
+    settings = _make_settings()
+    client = ShareApiClient(settings)
+
+    entry_json = {
+        "id": 21,
+        "type": "file",
+        "subject": "Uploaded Doc",
+        "body": {},
+        "filename": "doc.pdf",
+        "file_size": 9000,
+        "file_url": "http://example.com/api.php/entries/21/file",
+        "attachments": [],
+    }
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = entry_json
+    mock_response.raise_for_status = MagicMock()
+
+    mock_stream_response = MagicMock()
+    mock_stream_response.raise_for_status = MagicMock()
+    mock_stream_response.iter_bytes.return_value = [b"pdfbytes"]
+    mock_stream_response.__enter__ = MagicMock(return_value=mock_stream_response)
+    mock_stream_response.__exit__ = MagicMock(return_value=False)
+
+    with patch("share_api_mcp.api_client.httpx.Client") as mock_httpx:
+        mock_http_client = MagicMock()
+        mock_http_client.__enter__ = MagicMock(return_value=mock_http_client)
+        mock_http_client.__exit__ = MagicMock(return_value=False)
+        mock_http_client.get.return_value = mock_response
+        mock_http_client.stream.return_value = mock_stream_response
+        mock_httpx.return_value = mock_http_client
+
+        result = client.fetch_entry_with_files(
+            "http://example.com", 21, str(tmp_path)
+        )
+
+    assert len(result.downloaded_files) == 1
+    assert result.downloaded_files[0].attachment_id == 21
+    assert result.downloaded_files[0].filename == "doc.pdf"
+    assert Path(result.downloaded_files[0].file_path).exists()
+    assert Path(result.downloaded_files[0].file_path).read_bytes() == b"pdfbytes"
+
+
+def test_entry_without_file_url_no_download(tmp_path: Path) -> None:
+    """Entry without file_url does not attempt entry-level file download."""
+    settings = _make_settings()
+    client = ShareApiClient(settings)
+
+    entry_json = {
+        "id": 42,
+        "type": "text",
+        "subject": "Text Entry",
+        "body": {"content": "hello"},
+        "filename": "",
+        "file_size": 0,
+        "attachments": [],
+    }
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = entry_json
+    mock_response.raise_for_status = MagicMock()
+
+    with patch("share_api_mcp.api_client.httpx.Client") as mock_httpx:
+        mock_http_client = MagicMock()
+        mock_http_client.__enter__ = MagicMock(return_value=mock_http_client)
+        mock_http_client.__exit__ = MagicMock(return_value=False)
+        mock_http_client.get.return_value = mock_response
+        mock_httpx.return_value = mock_http_client
+
+        result = client.fetch_entry_with_files(
+            "http://example.com", 42, str(tmp_path)
+        )
+
+    assert len(result.downloaded_files) == 0
+    assert len(result.failed_downloads) == 0
+    # stream should never be called (no files to download)
+    mock_http_client.stream.assert_not_called()
+
+
+def test_entry_file_download_error_caught_gracefully(tmp_path: Path) -> None:
+    """Error downloading entry-level file is caught and recorded as failed."""
+    settings = _make_settings()
+    client = ShareApiClient(settings)
+
+    entry_json = {
+        "id": 21,
+        "type": "file",
+        "subject": "Broken Entry File",
+        "body": {},
+        "filename": "doc.pdf",
+        "file_size": 9000,
+        "file_url": "http://example.com/api.php/entries/21/file",
+        "attachments": [],
+    }
+
+    with patch.object(
+        client,
+        "download_entry_file",
+        side_effect=httpx.HTTPStatusError(
+            "Server Error",
+            request=MagicMock(),
+            response=MagicMock(status_code=500),
+        ),
+    ):
+        with patch.object(client, "fetch_entry", return_value=_parse_entry(entry_json)):
+            result = client.fetch_entry_with_files(
+                "http://example.com", 21, str(tmp_path)
+            )
+
+    assert result.entry.id == 21
+    assert len(result.downloaded_files) == 0
+    assert len(result.failed_downloads) == 1
+    assert result.failed_downloads[0].attachment_id == 21
+    assert result.failed_downloads[0].filename == "doc.pdf"
+    assert "Server Error" in result.failed_downloads[0].error
+
+
+def test_downloads_go_into_entry_subfolder(tmp_path: Path) -> None:
+    """Files are downloaded into {download_dir}/{entry_id}/ subfolder."""
+    settings = _make_settings()
+    client = ShareApiClient(settings)
+
+    entry_json = {
+        "id": 99,
+        "type": "share",
+        "subject": "Subfolder Test",
+        "body": {"content": "hello"},
+        "filename": "",
+        "file_size": 0,
+        "attachments": [
+            {
+                "id": 3,
+                "type": "file",
+                "body": {},
+                "filename": "pic.png",
+                "file_size": 512,
+                "file_url": "http://example.com/api.php/files/3",
+            },
+        ],
+    }
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = entry_json
+    mock_response.raise_for_status = MagicMock()
+
+    mock_stream_response = MagicMock()
+    mock_stream_response.raise_for_status = MagicMock()
+    mock_stream_response.iter_bytes.return_value = [b"imgdata"]
+    mock_stream_response.__enter__ = MagicMock(return_value=mock_stream_response)
+    mock_stream_response.__exit__ = MagicMock(return_value=False)
+
+    with patch("share_api_mcp.api_client.httpx.Client") as mock_httpx:
+        mock_http_client = MagicMock()
+        mock_http_client.__enter__ = MagicMock(return_value=mock_http_client)
+        mock_http_client.__exit__ = MagicMock(return_value=False)
+        mock_http_client.get.return_value = mock_response
+        mock_http_client.stream.return_value = mock_stream_response
+        mock_httpx.return_value = mock_http_client
+
+        result = client.fetch_entry_with_files(
+            "http://example.com", 99, str(tmp_path)
+        )
+
+    entry_dir = tmp_path / "99"
+    assert entry_dir.is_dir()
+    assert (entry_dir / "pic.png").exists()
+    assert result.downloaded_files[0].file_path == str(entry_dir / "pic.png")
+
+
+def test_content_md_written_to_subfolder(tmp_path: Path) -> None:
+    """content.md is written into the entry subfolder."""
+    settings = _make_settings()
+    client = ShareApiClient(settings)
+
+    entry_json = {
+        "id": 77,
+        "type": "share",
+        "subject": "Content MD Test",
+        "body": {"content": "Some text"},
+        "filename": "",
+        "file_size": 0,
+        "attachments": [],
+    }
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = entry_json
+    mock_response.raise_for_status = MagicMock()
+
+    with patch("share_api_mcp.api_client.httpx.Client") as mock_httpx:
+        mock_http_client = MagicMock()
+        mock_http_client.__enter__ = MagicMock(return_value=mock_http_client)
+        mock_http_client.__exit__ = MagicMock(return_value=False)
+        mock_http_client.get.return_value = mock_response
+        mock_httpx.return_value = mock_http_client
+
+        client.fetch_entry_with_files(
+            "http://example.com", 77, str(tmp_path)
+        )
+
+    content_md = tmp_path / "77" / "content.md"
+    assert content_md.exists()
+    text = content_md.read_text(encoding="utf-8")
+    assert "# Content MD Test" in text
+    assert "Some text" in text
+
+
+def test_content_md_path_set_on_result(tmp_path: Path) -> None:
+    """EntryResult.content_md_path points to the written content.md."""
+    settings = _make_settings()
+    client = ShareApiClient(settings)
+
+    entry_json = {
+        "id": 55,
+        "type": "note",
+        "subject": "Path Check",
+        "body": {},
+        "filename": "",
+        "file_size": 0,
+        "attachments": [],
+    }
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = entry_json
+    mock_response.raise_for_status = MagicMock()
+
+    with patch("share_api_mcp.api_client.httpx.Client") as mock_httpx:
+        mock_http_client = MagicMock()
+        mock_http_client.__enter__ = MagicMock(return_value=mock_http_client)
+        mock_http_client.__exit__ = MagicMock(return_value=False)
+        mock_http_client.get.return_value = mock_response
+        mock_httpx.return_value = mock_http_client
+
+        result = client.fetch_entry_with_files(
+            "http://example.com", 55, str(tmp_path)
+        )
+
+    expected_path = str(tmp_path / "55" / "content.md")
+    assert result.content_md_path == expected_path
+    assert Path(result.content_md_path).exists()

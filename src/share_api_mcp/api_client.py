@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import replace
 from typing import Any
 
 import httpx
@@ -43,6 +44,7 @@ def _parse_entry(data: dict[str, Any]) -> Entry:
         body=dict(data.get("body") or {}),
         filename=str(data.get("filename") or ""),
         file_size=int(data.get("file_size") or 0),
+        file_url=str(data.get("file_url") or ""),
         attachments=attachments,
     )
 
@@ -97,6 +99,33 @@ class ShareApiClient:
             file_size=file_size,
         )
 
+    def download_entry_file(
+        self, base_url: str, entry_id: int, filename: str, download_dir: str
+    ) -> DownloadedFile:
+        """Download an entry-level file from the API."""
+        url = f"{self._normalize_url(base_url)}/api.php/entries/{entry_id}/file"
+        logger.info("Downloading entry file %s from %s", filename, url)
+
+        os.makedirs(download_dir, exist_ok=True)
+        file_path = os.path.join(download_dir, filename)
+
+        with httpx.Client(auth=self._auth) as client:
+            with client.stream("GET", url) as response:
+                response.raise_for_status()
+                file_size = 0
+                with open(file_path, "wb") as f:
+                    for chunk in response.iter_bytes():
+                        f.write(chunk)
+                        file_size += len(chunk)
+
+        logger.info("Downloaded %s (%d bytes)", file_path, file_size)
+        return DownloadedFile(
+            attachment_id=entry_id,
+            filename=filename,
+            file_path=file_path,
+            file_size=file_size,
+        )
+
     def fetch_entry_with_files(
         self, base_url: str, entry_id: int, download_dir: str | None = None
     ) -> EntryResult:
@@ -104,10 +133,35 @@ class ShareApiClient:
         if download_dir is None:
             download_dir = self._settings.download_dir
 
+        entry_dir = os.path.join(download_dir, str(entry_id))
+
         entry = self.fetch_entry(base_url, entry_id)
 
         downloaded: list[DownloadedFile] = []
         failed: list[FailedDownload] = []
+
+        # Download entry-level file if present
+        if entry.file_url and entry.filename:
+            try:
+                df = self.download_entry_file(
+                    base_url, entry.id, entry.filename, entry_dir
+                )
+                downloaded.append(df)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to download entry file %d (%s): %s",
+                    entry.id,
+                    entry.filename,
+                    exc,
+                )
+                failed.append(
+                    FailedDownload(
+                        attachment_id=entry.id,
+                        filename=entry.filename,
+                        error=str(exc),
+                    )
+                )
+
         for att in entry.attachments:
             if att.type == "file" and att.filename:
                 if not att.file_url:
@@ -126,7 +180,7 @@ class ShareApiClient:
                     continue
                 try:
                     df = self.download_file(
-                        base_url, att.id, att.filename, download_dir
+                        base_url, att.id, att.filename, entry_dir
                     )
                     downloaded.append(df)
                 except Exception as exc:
@@ -144,8 +198,18 @@ class ShareApiClient:
                         )
                     )
 
-        return EntryResult(
+        result = EntryResult(
             entry=entry,
             downloaded_files=tuple(downloaded),
             failed_downloads=tuple(failed),
         )
+
+        # Generate and write content.md
+        content_md = result.generate_content_markdown()
+        os.makedirs(entry_dir, exist_ok=True)
+        content_md_path = os.path.join(entry_dir, "content.md")
+        with open(content_md_path, "w", encoding="utf-8") as f:
+            f.write(content_md)
+        logger.info("Wrote content markdown to %s", content_md_path)
+
+        return replace(result, content_md_path=content_md_path)
