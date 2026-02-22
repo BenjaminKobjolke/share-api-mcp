@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from share_api_mcp.models import Entry, EntryResult
+from share_api_mcp.models import Attachment, Entry, EntryResult, FailedDownload
 
 
 def test_fetch_shared_entry_no_base_url() -> None:
@@ -73,3 +73,35 @@ def test_fetch_shared_entry_exception_returns_error() -> None:
 
     assert "Error" in result
     assert "connection failed" in result
+
+
+def test_fetch_shared_entry_partial_success_shows_failed_downloads() -> None:
+    att = Attachment(id=8, type="file", filename="missing.png", file_size=5000)
+    entry = Entry(
+        id=19, type="share", subject="Partial", attachments=(att,)
+    )
+    fd = FailedDownload(
+        attachment_id=8,
+        filename="missing.png",
+        error="File not available on server",
+    )
+    entry_result = EntryResult(entry=entry, failed_downloads=(fd,))
+
+    mock_client = MagicMock()
+    mock_client.fetch_entry_with_files.return_value = entry_result
+
+    with (
+        patch.dict(
+            "os.environ",
+            {"SHARE_API_BASE_URL": "http://example.com"},
+            clear=True,
+        ),
+        patch("share_api_mcp.mcp_server.ShareApiClient", return_value=mock_client),
+    ):
+        from share_api_mcp.mcp_server import fetch_shared_entry
+
+        result = fetch_shared_entry(entry_id=19)
+
+    assert "Entry #19: Partial" in result
+    assert "Failed downloads:" in result
+    assert "[8] missing.png: File not available on server" in result

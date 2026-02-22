@@ -9,7 +9,13 @@ from typing import Any
 import httpx
 
 from share_api_mcp.config.settings import Settings
-from share_api_mcp.models import Attachment, DownloadedFile, Entry, EntryResult
+from share_api_mcp.models import (
+    Attachment,
+    DownloadedFile,
+    Entry,
+    EntryResult,
+    FailedDownload,
+)
 
 logger = logging.getLogger("share-api-mcp")
 
@@ -22,6 +28,7 @@ def _parse_attachment(data: dict[str, Any]) -> Attachment:
         body=dict(data.get("body") or {}),
         filename=str(data.get("filename") or ""),
         file_size=int(data.get("file_size") or 0),
+        file_url=str(data.get("file_url") or ""),
     )
 
 
@@ -100,9 +107,45 @@ class ShareApiClient:
         entry = self.fetch_entry(base_url, entry_id)
 
         downloaded: list[DownloadedFile] = []
+        failed: list[FailedDownload] = []
         for att in entry.attachments:
             if att.type == "file" and att.filename:
-                df = self.download_file(base_url, att.id, att.filename, download_dir)
-                downloaded.append(df)
+                if not att.file_url:
+                    logger.warning(
+                        "Skipping attachment %d (%s): file not available on server",
+                        att.id,
+                        att.filename,
+                    )
+                    failed.append(
+                        FailedDownload(
+                            attachment_id=att.id,
+                            filename=att.filename,
+                            error="File not available on server",
+                        )
+                    )
+                    continue
+                try:
+                    df = self.download_file(
+                        base_url, att.id, att.filename, download_dir
+                    )
+                    downloaded.append(df)
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to download attachment %d (%s): %s",
+                        att.id,
+                        att.filename,
+                        exc,
+                    )
+                    failed.append(
+                        FailedDownload(
+                            attachment_id=att.id,
+                            filename=att.filename,
+                            error=str(exc),
+                        )
+                    )
 
-        return EntryResult(entry=entry, downloaded_files=tuple(downloaded))
+        return EntryResult(
+            entry=entry,
+            downloaded_files=tuple(downloaded),
+            failed_downloads=tuple(failed),
+        )

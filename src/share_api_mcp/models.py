@@ -15,6 +15,7 @@ class Attachment:
     body: dict[str, Any] = field(default_factory=dict)
     filename: str = ""
     file_size: int = 0
+    file_url: str = ""
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,15 @@ class Entry:
     filename: str = ""
     file_size: int = 0
     attachments: tuple[Attachment, ...] = ()
+
+
+@dataclass(frozen=True)
+class FailedDownload:
+    """A file attachment that could not be downloaded."""
+
+    attachment_id: int
+    filename: str
+    error: str
 
 
 @dataclass(frozen=True)
@@ -46,6 +56,7 @@ class EntryResult:
 
     entry: Entry
     downloaded_files: tuple[DownloadedFile, ...] = ()
+    failed_downloads: tuple[FailedDownload, ...] = ()
 
     def format_output(self) -> str:
         """Format the entry and downloaded files for display."""
@@ -79,5 +90,11 @@ class EntryResult:
             lines.append("Downloaded files:")
             for df in self.downloaded_files:
                 lines.append(f"  {df.filename} -> {df.file_path} ({df.file_size} bytes)")
+
+        if self.failed_downloads:
+            lines.append("")
+            lines.append("Failed downloads:")
+            for fd in self.failed_downloads:
+                lines.append(f"  [{fd.attachment_id}] {fd.filename}: {fd.error}")
 
         return "\n".join(lines)

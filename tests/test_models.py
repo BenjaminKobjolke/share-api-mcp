@@ -1,6 +1,12 @@
 """Tests for data models."""
 
-from share_api_mcp.models import Attachment, DownloadedFile, Entry, EntryResult
+from share_api_mcp.models import (
+    Attachment,
+    DownloadedFile,
+    Entry,
+    EntryResult,
+    FailedDownload,
+)
 
 
 def test_attachment_is_frozen() -> None:
@@ -34,6 +40,7 @@ def test_attachment_defaults() -> None:
     assert att.body == {}
     assert att.filename == ""
     assert att.file_size == 0
+    assert att.file_url == ""
 
 
 def test_downloaded_file() -> None:
@@ -86,3 +93,25 @@ def test_entry_result_format_output_with_entry_file() -> None:
     result = EntryResult(entry=entry)
     output = result.format_output()
     assert "File: doc.pdf (5000 bytes)" in output
+
+
+def test_failed_download_is_frozen() -> None:
+    fd = FailedDownload(attachment_id=1, filename="a.png", error="not found")
+    try:
+        fd.attachment_id = 2  # type: ignore[misc]
+        raise AssertionError("Should be frozen")
+    except AttributeError:
+        pass
+
+
+def test_entry_result_format_output_with_failed_downloads() -> None:
+    att = Attachment(id=8, type="file", filename="missing.png", file_size=1000)
+    entry = Entry(id=19, type="share", subject="Broken", attachments=(att,))
+    fd = FailedDownload(
+        attachment_id=8, filename="missing.png", error="File not available on server"
+    )
+    result = EntryResult(entry=entry, failed_downloads=(fd,))
+    output = result.format_output()
+    assert "Entry #19: Broken" in output
+    assert "Failed downloads:" in output
+    assert "[8] missing.png: File not available on server" in output
