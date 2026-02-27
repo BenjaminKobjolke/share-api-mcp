@@ -13,8 +13,25 @@ src/share_api_mcp/
 
 ## API Endpoints
 
-- `GET {base_url}/api.php/entries/{id}` - Fetch entry JSON with attachments
-- `GET {base_url}/api.php/files/{attachment_id}` - Download file binary
+- `GET {base_url}/api.php/entries` - Paginated entry list
+- `GET {base_url}/api.php/entries/{id}` - Fetch entry with attachments
+- `PUT {base_url}/api.php/entries/{id}` - Update entry
+- `DELETE {base_url}/api.php/entries/{id}` - Delete entry (cascade)
+- `GET {base_url}/api.php/custom-fields` - List custom fields
+- `POST {base_url}/api.php/custom-fields` - Create custom field
+- `PUT {base_url}/api.php/custom-fields/{name}` - Update custom field
+- `DELETE {base_url}/api.php/custom-fields/{name}` - Delete custom field (cascade)
+- `GET {base_url}/api.php/custom-fields/export` - Export fields with options
+- `POST {base_url}/api.php/custom-fields/import` - Import fields (merge mode)
+- `GET {base_url}/api.php/field-options/{field}` - List field options
+- `POST {base_url}/api.php/field-options/{field}` - Create option
+- `PUT {base_url}/api.php/field-options/{field}/{id}` - Rename option
+- `DELETE {base_url}/api.php/field-options/{field}/{id}` - Delete option (cascade)
+- `GET {base_url}/api.php/files/{id}` - Download attachment file
+- `DELETE {base_url}/api.php/attachments/{id}` - Delete attachment
+- `GET {base_url}/api.php/auth` - Auth method discovery
+- `GET {base_url}/api.php/fields` - Schema/field discovery
+- `POST {base_url}/share.php` - Webhook (create entry)
 
 ## Rules
 
