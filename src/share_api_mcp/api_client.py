@@ -306,7 +306,7 @@ class ShareApiClient:
             response = client.get(url, params=params)
             response.raise_for_status()
             data = response.json()
-        entries = tuple(_parse_entry_summary(e) for e in data.get("data", []))
+        entries = tuple(_parse_entry_summary(e) for e in data.get("entries", []))
         return EntryListResult(
             entries=entries,
             total=int(data.get("total", 0)),

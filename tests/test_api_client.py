@@ -749,7 +749,7 @@ def test_list_entries() -> None:
     client = ShareApiClient(settings)
 
     response_data = {
-        "data": [
+        "entries": [
             {"id": 1, "type": "note", "subject": "A", "body": "text"},
             {"id": 2, "type": "file", "subject": "B", "filename": "f.pdf"},
         ],
