@@ -161,7 +161,8 @@ def update_entry(
         base_url: Base URL of the share API. Falls back to SHARE_API_BASE_URL env var.
         subject: New subject for the entry.
         body: New body content as JSON string (e.g. '{"content": "text"}').
-        custom_fields: Optional JSON string of custom field values.
+        custom_fields: Optional JSON string of custom field values to set as top-level keys.
+                       Example: '{"status_id": 3}' or '{"status_id": 3, "project_id": 1}'.
     """
     try:
         settings = Settings.from_env()
@@ -177,7 +178,7 @@ def update_entry(
                 return f"Error: Invalid body JSON: {je}"
         if custom_fields:
             try:
-                payload["custom_fields"] = json.loads(custom_fields)
+                payload.update(json.loads(custom_fields))
             except json.JSONDecodeError as je:
                 return f"Error: Invalid custom_fields JSON: {je}"
 

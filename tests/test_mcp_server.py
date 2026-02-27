@@ -205,6 +205,25 @@ def test_update_entry_invalid_body_json() -> None:
     assert "Invalid body JSON" in result
 
 
+def test_update_entry_custom_fields_merged_top_level() -> None:
+    entry = Entry(id=1, type="note", subject="S")
+
+    mock_client = MagicMock()
+    mock_client.update_entry.return_value = entry
+
+    with (
+        patch.dict("os.environ", {"SHARE_API_BASE_URL": "http://example.com"}, clear=True),
+        patch("share_api_mcp.mcp_server.ShareApiClient", return_value=mock_client),
+    ):
+        from share_api_mcp.mcp_server import update_entry
+
+        update_entry(entry_id=1, subject="S", custom_fields='{"status_id": 3}')
+
+    payload = mock_client.update_entry.call_args[0][2]
+    assert payload == {"subject": "S", "status_id": 3}
+    assert "custom_fields" not in payload
+
+
 # --- delete_entry ---
 
 
