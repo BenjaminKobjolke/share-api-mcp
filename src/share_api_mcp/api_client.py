@@ -130,8 +130,9 @@ class ShareApiClient:
             self._auth = httpx.BasicAuth(settings.auth_user, settings.auth_password)
 
     def _normalize_url(self, base_url: str) -> str:
-        """Strip trailing slashes from the base URL."""
-        return base_url.rstrip("/")
+        """Strip trailing slashes and replace localhost with 127.0.0.1."""
+        url = base_url.replace("://localhost", "://127.0.0.1")
+        return url.rstrip("/")
 
     def fetch_entry(self, base_url: str, entry_id: int) -> Entry:
         """Fetch an entry by ID from the API."""

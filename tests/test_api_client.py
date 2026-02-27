@@ -94,6 +94,28 @@ def test_fetch_entry_parses_response() -> None:
     )
 
 
+def test_fetch_entry_replaces_localhost_with_127_0_0_1() -> None:
+    settings = _make_settings()
+    client = ShareApiClient(settings)
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = _sample_entry_json()
+    mock_response.raise_for_status = MagicMock()
+
+    with patch("share_api_mcp.api_client.httpx.Client") as mock_httpx:
+        mock_http_client = MagicMock()
+        mock_http_client.__enter__ = MagicMock(return_value=mock_http_client)
+        mock_http_client.__exit__ = MagicMock(return_value=False)
+        mock_http_client.get.return_value = mock_response
+        mock_httpx.return_value = mock_http_client
+
+        client.fetch_entry("http://localhost/share", 42)
+
+    mock_http_client.get.assert_called_once_with(
+        "http://127.0.0.1/share/api.php/entries/42"
+    )
+
+
 def test_fetch_entry_strips_trailing_slash() -> None:
     settings = _make_settings()
     client = ShareApiClient(settings)
