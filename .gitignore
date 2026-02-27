@@ -16,3 +16,4 @@ downloads/
 .mypy_cache
 .claude
 .env
+_.env
