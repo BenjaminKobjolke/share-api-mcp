@@ -25,7 +25,8 @@ Add the following to your Claude Code MCP configuration file:
         "SHARE_API_BASE_URL": "https://your-server.com/share",
         "SHARE_API_DOWNLOAD_DIR": "./downloads",
         "SHARE_API_AUTH_USER": "",
-        "SHARE_API_AUTH_PASSWORD": ""
+        "SHARE_API_AUTH_PASSWORD": "",
+        "SHARE_API_PROJECT_ID": ""
       }
     }
   }
@@ -45,12 +46,17 @@ Add the following to your Claude Code MCP configuration file:
         "SHARE_API_BASE_URL": "https://your-server.com/share",
         "SHARE_API_DOWNLOAD_DIR": "./downloads",
         "SHARE_API_AUTH_USER": "",
-        "SHARE_API_AUTH_PASSWORD": ""
+        "SHARE_API_AUTH_PASSWORD": "",
+        "SHARE_API_PROJECT_ID": ""
       }
     }
   }
 }
 ```
+
+### Per-Project Filtering
+
+Set `SHARE_API_PROJECT_ID` to automatically filter `list_entries` by project. This removes the need to manually look up the project ID via `list_field_options` each session. An explicit `project_id` in the filters argument overrides the env var.
 
 ### Direct CLI Registration
 
