@@ -23,6 +23,7 @@ MCP server for the media-file-explorer-share PHP API. Fetches shared entries by 
 | `SHARE_API_DOWNLOAD_DIR` | No | Directory for downloaded files (default: `./downloads`) |
 | `SHARE_API_AUTH_USER` | No | HTTP Basic Auth username |
 | `SHARE_API_AUTH_PASSWORD` | No | HTTP Basic Auth password |
+| `SHARE_API_PROJECT_ID` | No | Auto-filter `list_entries` by this project ID |
 
 ## MCP Tool
 

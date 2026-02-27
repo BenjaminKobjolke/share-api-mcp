@@ -36,7 +36,9 @@ mcp = FastMCP(
     instructions=(
         "This API manages shared entries (notes, files, links) across multiple projects. "
         "IMPORTANT: Always filter entries by project. Do NOT list all entries. "
-        "Workflow (first time only): "
+        "If SHARE_API_PROJECT_ID is configured, entries are automatically filtered by project — "
+        "you can skip the manual project lookup and call list_entries directly. "
+        "Workflow (only needed when SHARE_API_PROJECT_ID is NOT configured): "
         "1) Call list_field_options with field_name='project' to get all available projects. "
         "2) Call list_field_options with field_name='status' to get all available statuses. "
         "3) Pick the project matching your current context or ask the user which project to use. "
@@ -111,9 +113,9 @@ def list_entries(
     """List shared entries with pagination and optional filters.
 
     IMPORTANT: Always filter by project to avoid listing unrelated entries.
-    First call list_field_options(field_name='project') to get all available projects and their IDs.
-    Then call list_field_options(field_name='status') to get all available statuses and their IDs.
-    Pass the matching project_id via filters to scope results to the relevant project.
+    If SHARE_API_PROJECT_ID is set, entries are automatically filtered by that project.
+    An explicit project_id in filters overrides the env var.
+    If no project_id is configured, call list_field_options(field_name='project') first.
 
     Args:
         base_url: Base URL of the share API. Falls back to SHARE_API_BASE_URL env var.
@@ -128,12 +130,19 @@ def list_entries(
         settings = Settings.from_env()
         effective_base_url = _resolve_base_url(base_url, settings)
 
-        parsed_filters = None
+        parsed_filters: dict[str, object] | None = None
         if filters:
             try:
                 parsed_filters = json.loads(filters)
             except json.JSONDecodeError as je:
                 return f"Error: Invalid filters JSON: {je}"
+
+        if settings.project_id and (
+            parsed_filters is None or "project_id" not in parsed_filters
+        ):
+            if parsed_filters is None:
+                parsed_filters = {}
+            parsed_filters["project_id"] = int(settings.project_id)
 
         client = ShareApiClient(settings)
         result = client.list_entries(
