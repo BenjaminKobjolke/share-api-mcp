@@ -31,7 +31,21 @@ stderr_handler.setLevel(logging.WARNING)
 stderr_handler.setFormatter(logging.Formatter(LOG_FORMAT))
 logger.addHandler(stderr_handler)
 
-mcp = FastMCP("share-api")
+mcp = FastMCP(
+    "share-api",
+    instructions=(
+        "This API manages shared entries (notes, files, links) across multiple projects. "
+        "IMPORTANT: Always filter entries by project. Do NOT list all entries. "
+        "Workflow (first time only): "
+        "1) Call list_field_options with field_name='project' to get all available projects. "
+        "2) Call list_field_options with field_name='status' to get all available statuses. "
+        "3) Pick the project matching your current context or ask the user which project to use. "
+        "4) Store the project_id and status IDs for the rest of the session — do NOT look them up again. "
+        "5) Call list_entries with filters='{\"project_id\": <id>}' to list only that project's entries. "
+        "You can combine filters, e.g. '{\"project_id\": 1, \"status_id\": 2}'. "
+        "Discover all available filter fields via list_fields or list_custom_fields."
+    ),
+)
 
 
 def _resolve_base_url(base_url: str, settings: Settings) -> str:
@@ -96,11 +110,19 @@ def list_entries(
 ) -> str:
     """List shared entries with pagination and optional filters.
 
+    IMPORTANT: Always filter by project to avoid listing unrelated entries.
+    First call list_field_options(field_name='project') to get all available projects and their IDs.
+    Then call list_field_options(field_name='status') to get all available statuses and their IDs.
+    Pass the matching project_id via filters to scope results to the relevant project.
+
     Args:
         base_url: Base URL of the share API. Falls back to SHARE_API_BASE_URL env var.
         page: Page number (default 1).
         per_page: Entries per page (default 20).
-        filters: Optional JSON string of filter key-value pairs (e.g. '{"type": "note"}').
+        filters: Optional JSON string of filter key-value pairs.
+                 Use custom field filters like project_id, status_id, resolution_id.
+                 Example: '{"project_id": 1}' or '{"project_id": 1, "status_id": 2}'.
+                 Discover all available filter fields via list_fields or list_custom_fields.
     """
     try:
         settings = Settings.from_env()
